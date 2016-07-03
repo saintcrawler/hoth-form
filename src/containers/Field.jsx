@@ -5,10 +5,10 @@ const Field = React.createClass({
   mixins: [PureRenderMixin],
 
   makeErrorsList: function(errors) {
-    if (errors) {
+    if (errors.length > 0) {
       return (
         <ul className="errors">
-          {errors.map((e, i) => e && <li key={i}>{e}</li>)}
+          {errors.map((e, i) => <li key={i}>{e}</li>)}
         </ul>
       )
     } else {
@@ -40,7 +40,7 @@ const Field = React.createClass({
     return (
       <div className="form-group">
         {this.labeledWidget(this.props)}
-        {this.showErrors(this.props) && this.makeErrorsList([].concat(errors, moreErrors))}
+        {this.showErrors(this.props) && this.makeErrorsList([].concat(errors, moreErrors).filter(i => i))}
       </div>
     )
   }

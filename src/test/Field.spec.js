@@ -27,6 +27,8 @@ describe('Field component', function() {
     
     const combined = shallow(<Field errors={['the', undefined]} moreErrors='gates' />).find('.errors li').map(i => i.text());
     expect(combined).to.eql(['the', 'gates']);
+
+    expect(shallow(<Field />).find('.errors')).to.not.exist;
   });
 
   it('doesn`t render errors if `errOnDirty` is true, field is not dirty and has errors', function() {
