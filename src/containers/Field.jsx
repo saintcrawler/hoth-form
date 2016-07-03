@@ -1,7 +1,7 @@
 import React from 'react'
 import PureRenderMixin from 'react-addons-pure-render-mixin'
 
-export const Field = React.createClass({
+const Field = React.createClass({
   mixins: [PureRenderMixin],
 
   makeErrorsList: function(errors) {
@@ -16,14 +16,31 @@ export const Field = React.createClass({
     }
   },
 
+  showErrors(props) {
+    const {errOnDirty, dirty} = props;
+    return !errOnDirty || dirty;
+  },
+
+  labeledWidget: function(props) {
+    const {label, widget = 'input', children} = props;
+    if (label) {
+      return <label>{label}{widget && React.createElement(widget, props, children)}</label>
+    } else {
+      return widget && React.createElement(widget, props, children)
+    }
+  },
+
   render: function() {
-    const {label, widget, errors, moreErrors, children} = this.props;
-    if(errors) errors.tolkien =' jaja';
+    let {label, widget, errors, moreErrors, children} = this.props;
+    if (widget === 'select') {
+      children = React.Children.map(children, el => 
+        React.cloneElement(el, this.props.fields[el.props.value])
+      );
+    }
     return (
-      <div>
-        {label}
-        {widget && React.createElement(widget, this.props, children)}
-        {this.makeErrorsList([].concat(errors, moreErrors))}
+      <div className="form-group">
+        {this.labeledWidget(this.props)}
+        {this.showErrors(this.props) && this.makeErrorsList([].concat(errors, moreErrors))}
       </div>
     )
   }

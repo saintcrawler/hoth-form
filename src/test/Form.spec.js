@@ -32,9 +32,15 @@ function onChange() {
   }
 }
 
-function validate() {
+function validate(fields) {
   return {
     username: 'Too many johnes'
+  }
+}
+
+function disableSubmit(fields) {
+  return {
+    disabled: true
   }
 }
 
@@ -45,9 +51,9 @@ describe('Form container', function() {
   beforeEach(function() {
     spiedReducer = spy(combineReducers({form: formReducer}));
     const store = createStore(spiedReducer, {}, applyMiddleware(thunk));    
-    createForm = function(onChange, validate) {
+    createForm = function(onChange, validate, moreErrors) {
       return mount(
-        <Form store={store} id="form1" fields={fields} onChange={onChange} validate={validate}>
+        <Form store={store} id="form1" fields={fields} onChange={onChange} validate={validate} moreErrors={moreErrors}>
           <input id="username" name="username" />
           <input id="male" name="sex" value="male" type="radio" />
           <input id="female" name="sex" value="female" type="radio" />
@@ -63,7 +69,7 @@ describe('Form container', function() {
             <option value="python">Python</option>
           </select>
           <input id="excess" name="excess" />
-          <button>Submit</button>
+          <button hoth-form={disableSubmit}>Submit</button>
         </Form>
       );
     };
@@ -152,15 +158,63 @@ describe('Form container', function() {
       expect(form.find("#agree")).to.have.prop('value', false);
       expect(form.find("#tomato")).to.be.selected();
       expect(Object.keys(form.find("#excess").props()).length).to.eql(2);
-      expect(Object.keys(form.find("button").props()).length).to.eql(1); // children 'Submit'
+      expect(Object.keys(form.find("button").props()).length).to.eql(3); // children 'Submit'
     });
 
-    it('provides children which have prop `hoth-form` with props returned by calling `hoth-form` function');
+    it('provides children which have prop `hoth-form` with props returned by calling `hoth-form` function', function() {
+      const spied = spy(disableSubmit);
+      const form = createForm();
+      // Something strange here - it shows that spy is not being called, but injects props correctly
+
+      // expect(spied).to.have.been.calledWith({
+      //   id: 'form1',
+      //   fields: {
+      //     username: {initialValue: 'john', value: 'john'},
+      //     sex: {fields: {male: {checked: true}, female: {checked: false}}, initialValue: 'male', value: 'male'},
+      //     agree: {checked: false, initialValue: false, value: false},
+      //     hands: {fields: {left: {checked: false}, right: {checked: false}}, initialValue: [], value: []},
+      //     fruits: {fields: {tomato: {checked: true}, potato: {checked: false}}, initialValue: 'tomato', value: 'tomato'},
+      //     pets: {fields: {rat: {checked: true}, python: {checked: false}}, initialValue: ['rat'], value: ['rat']},
+      //     nonFieldErrors: {errors: null}
+      //   },
+      //   initialized: true,
+      //   errors: false
+      // });
+      expect(form.find('button')).to.have.prop('disabled', true);
+    });
   });
 
   describe('onFieldChange function', function() {
-    it('calls `onChange` function if exists');
-    it('calls `validate` function if exists');
+    it('calls `onChange` function if exists', function() {
+      const spied = spy(onChange);
+      const form = createForm(spied);
+      form.find('#username').simulate('change', {target: {name: 'username', value: 'mark'}});
+      expect(spied).to.have.been.calledWith({
+        username: {
+          value: 'mark'
+        }
+      });
+    });
+
+    it('calls `validate` function if exists', function() {
+      const spied = spy(validate);
+      const form = createForm(null, spied);
+      form.find('#username').simulate('change', {target: {name: 'username', value: 'mark'}});
+      expect(spied).to.have.been.calledWith({
+        username: {initialValue: 'john', value: 'mark', errors: ['Too many johnes'], dirty: true},
+        sex: {fields: {male: {checked: true}, female: {checked: false}}, initialValue: 'male', value: 'male'},
+        agree: {checked: false, initialValue: false, value: false},
+        hands: {fields: {left: {checked: false}, right: {checked: false}}, initialValue: [], value: []},
+        fruits: {fields: {tomato: {checked: true}, potato: {checked: false}}, initialValue: 'tomato', value: 'tomato'},
+        pets: {fields: {rat: {checked: true}, python: {checked: false}}, initialValue: ['rat'], value: ['rat']},
+        nonFieldErrors: {errors: null}
+      });
+    });
+
+    it('injects `moreErrors` keys values into elements with corresponding `name` props', function() {
+      const form = createForm(null, null, {username: 'This name was already taken'});
+      expect(form.find('#username')).to.have.prop('moreErrors', 'This name was already taken');
+    });
 
     it('handles input changes', function() {
       const form = createForm();

@@ -1,12 +1,13 @@
 {
   "name": "hoth-form",
-  "version": "0.0.1",
+  "version": "0.0.5",
   "description": "Another form builder for React and Redux",
   "main": "lib/index.js",
   "scripts": {
     "test": "mocha src/test --compilers js:babel-core/register --require src/test/jsdom-setup.js",
     "compile": "babel src -d lib",
-    "prepublish": "npm run compile"
+    "prepublish": "npm run compile",
+    "coverage": "node node_modules/istanbul/lib/cli cover node_modules/mocha/bin/_mocha -- src/test --compilers js:babel-core/register --require src/test/jsdom-setup.js"
   },
   "repository": {
     "type": "git",
@@ -34,6 +35,7 @@
     "chai-enzyme": "^0.5.0",
     "chai-subset": "^1.2.2",
     "enzyme": "^2.3.0",
+    "istanbul": "^1.0.0-alpha",
     "jsdom": "^9.3.0",
     "mocha": "^2.5.3",
     "react-addons-test-utils": "^15.1.0",

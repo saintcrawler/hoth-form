@@ -34,7 +34,7 @@ const initFields = {
     },
     value: 'red',
   },
-  'agree': true
+  'agree': false
 };
 const initialized = Map({
   testForm1: Map({
@@ -91,9 +91,9 @@ const initialized = Map({
         value: 'red',
       },
       'agree': {
-        initialValue: true,
-        value: true,
-        checked: true
+        initialValue: false,
+        value: false,
+        checked: false
       },
       'nonFieldErrors': {
         errors: null
@@ -106,6 +106,25 @@ describe('Form reducer', function() {
   it('has proper initial state', function() {
     const nextState = reducer(undefined, {type: 'TEST'});
     expect(nextState.toJS()).to.eql({});
+  });
+
+  it('correctly uses nonFieldErrorsKey value', function() {
+    config.nonFieldErrorsKey = 'formErrors';
+    const state = Map();
+    const action = {
+      type: actionTypes.initForm,
+      payload: {
+        id: 'testForm2',
+        fields: initFields
+      }
+    };
+    const nextState = reducer(state, action);
+    expect(nextState.toJS()).to.containSubset({
+      testForm2: {
+        fields: {formErrors: {errors: null}}
+      }
+    });
+    config.nonFieldErrorsKey = 'nonFieldErrors';
   });
 
   it('handles INIT_FORM action', function() {
@@ -134,8 +153,11 @@ describe('Form reducer', function() {
             value: 'mark',
             disabled: false
           },
+          'password': {
+            value: 'doe'
+          },
           'agree': {
-            value: false
+            value: true
           },
           'transport': {
             fields: {
@@ -143,7 +165,7 @@ describe('Form reducer', function() {
             }
           },
           'transport.car': {
-            value: ['mazda']
+            value: ['ford', 'toyota']
           }
         },
         setValue: true
@@ -159,11 +181,13 @@ describe('Form reducer', function() {
           'username': {
             initialValue: 'john',
             value: 'mark',
-            disabled: false
+            disabled: false,
+            dirty: true
           },
           'password': {
             initialValue: 'doe',
-            value: 'doe'
+            value: 'doe',
+            dirty: false
           },
           'transport': {
             fields: {
@@ -176,6 +200,7 @@ describe('Form reducer', function() {
             initialValue: ['car', 'turbodesk'],
             value: ['feet', 'car', 'turbodesk'], // Potential test failure here.
             // Because values are determined by iteratng through fields' keys and thus are not ordered.
+            dirty: true
           },
           'transport.feet': {
             fields: {
@@ -188,12 +213,13 @@ describe('Form reducer', function() {
           },
           'transport.car': {
             fields: {
-              toyota: {checked: false}, 
-              mazda: {checked: true},
-              ford: {checked: false},
+              toyota: {checked: true}, 
+              mazda: {checked: false},
+              ford: {checked: true},
             },
             initialValue: ['toyota', 'ford'],
-            value: ['mazda'],
+            value: ['ford', 'toyota'],
+            dirty: false // note different order in initialValue and value
           },
           'transport.car.color': {
             fields: {
@@ -205,9 +231,10 @@ describe('Form reducer', function() {
             value: 'red',
           },
           'agree': {
-            initialValue: true,
-            value: false,
-            checked: false
+            initialValue: false,
+            value: true,
+            checked: true,
+            dirty: true
           },
           'nonFieldErrors': {
             errors: null
@@ -217,7 +244,25 @@ describe('Form reducer', function() {
     });
   });
 
-  it('handles CHANGE_FOCUS action');
+  it('handles CHANGE_FOCUS action', function() {
+    const state = initialized;
+    const nextState = reducer(state, {
+      type: actionTypes.changeFocus,
+      payload: {
+        id: 'testForm2',
+        fields: {
+          username: {active: true}
+        }
+      }
+    });
+    expect(nextState.toJS()).to.containSubset({
+      testForm2: {
+        fields: {
+          username: {active: true}
+        }
+      }
+    });
+  });
 
   it('handles SET_ERRORS action', function() {
     const state = initialized.setIn(['testForm2', 'fields', 'password'], {errors: 'Some error'});

@@ -1,6 +1,8 @@
 import isPlainObject from 'lodash/isPlainObject'
 import isArray from 'lodash/isArray'
 import mergeWith from 'lodash/mergeWith'
+import isEqual from 'lodash/isEqual'
+import sortBy from 'lodash/sortBy'
 import { Map, fromJS } from 'immutable'
 
 import config from './config'
@@ -58,7 +60,7 @@ function initFields(fields) {
     }
 
     if (!field.hasOwnProperty('initialValue')) {
-      field.initialValue = field.value || '';
+      field.initialValue = (field.value === undefined) ? '' : field.value;
     }
     if (!field.hasOwnProperty('value')) {
       field.value = field.initialValue;
@@ -131,7 +133,16 @@ function setValue(newField, props) {
       }
     }
   }
+  newField.dirty = isDirty(newField.value, newField.initialValue);
   return newField;
+}
+
+function isDirty(val, initVal) {
+  if (typeof val === 'boolean') {
+    return val !== initVal;
+  } else {
+    return !isEqual(sortBy(val), sortBy(initVal));
+  }
 }
 
 function additionalChanges(state, action) {
