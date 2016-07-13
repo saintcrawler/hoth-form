@@ -2,6 +2,12 @@
 
 Another way to work with forms in React and Redux.
 
+---
+## #Warning#:             
+Soon, there will be a new version, which does not require Redux and immutable js
+
+---
+
 ### How to use
 
 `npm install hoth-form`
