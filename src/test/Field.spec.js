@@ -36,13 +36,99 @@ describe('Field component', function() {
     expect(shallow(<Field errOnDirty dirty={false} errors={['No', 'one']} />).find('.errors')).to.not.exist;
   });
 
-  it('injects all props to the `widget` element', function() {
-    expect(shallow(<Field id="name" className="myName" value="john" label="User" />).find('input').props()).to.eql({
+  it('injects all props to the `widget` element if it is custom React component', function() {
+    function MyCustom(props) {
+      return <div>custom</div>
+    }
+    expect(shallow(<Field widget={MyCustom} id="name" className="myName" value="john" label="User" />)
+      .find('MyCustom')
+      .props())
+      .to.eql({
+        id: 'name',
+        value: 'john',
+        className: 'myName pristine valid',
+        label: 'User',
+        widget: MyCustom,
+        children: undefined
+      });
+  });
+
+  it('injects filtered props to the `widget` element if it is plain old form element', function() {
+    const injectedProps = {
       id: 'name',
       className: 'myName',
       value: 'john',
       label: 'User',
-      children: undefined
-    });
+      hoth: 'test',
+      extra: 'test'
+    };
+    const expectedProps = {
+      id: 'name',
+      value: 'john',
+      className: 'myName pristine valid',
+      children: undefined,
+    };
+    function testFiltering(widget) {
+      expect(shallow(<Field widget={widget} {...injectedProps} />)
+        .find(widget)
+        .props())
+        .to.eql(expectedProps);
+    }
+
+    testFiltering('input');
+    testFiltering('select');
+    testFiltering('button');
+    testFiltering('textarea');
+  });
+
+  it('appends current className with `dirty/pristine` based on `dirty` prop', function() {
+    expect(shallow(<Field dirty={true} />)
+      .find('input'))
+      .to.have.prop('className', ' dirty valid');
+
+    expect(shallow(<Field dirty={false} />)
+      .find('input'))
+      .to.have.prop('className', ' pristine valid');
+  });
+
+  it('appends current className with `valid/invalid` based on `errors` and `moreErors` props', function() {
+    expect(shallow(<Field errors={true} />)
+      .find('input'))
+      .to.have.prop('className', ' pristine invalid');
+
+    expect(shallow(<Field moreErrors={true} />)
+      .find('input'))
+      .to.have.prop('className', ' pristine invalid');
+
+    expect(shallow(<Field />)
+      .find('input'))
+      .to.have.prop('className', ' pristine valid');
+  });
+
+  it('does not set `value` prop if `type == file`', function() {
+    expect(shallow(<Field type="file" value="somefile" />)
+      .find('input'))
+      .to.not.have.prop('value', 'somefile');
+
+    expect(shallow(<Field type="file" value="" />)
+      .find('input'))
+      .to.not.have.prop('value', '');
+  });
+
+  it('render children with `fields` prop', function() {
+    const fields = {
+      red: {id: 'red'},
+      green: {id: 'green', disabled: true},
+      blue: {}
+    }
+    const f = shallow(
+      <Field fields={fields}>
+        <option value="red" />
+        <option value="green" />
+        <option value="blue" />
+      </Field>
+    );
+    expect(f.find('#red')).to.exist;
+    expect(f.find('#green')).to.have.prop('disabled', true);
   });
 });

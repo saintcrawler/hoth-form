@@ -1,42 +1,60 @@
 import React from 'react'
-import { connect } from 'react-redux'
-import PureRenderMixin from 'react-addons-pure-render-mixin'
+
+import {
+  changeValue, 
+  additionalChanges, 
+  performValidation,
+  initFields,
+  resetFields,
+  filterProps } from '../utils'
 
 import config from '../config'
-import * as Actions from '../actions'
 
-const { actionTypes } = config;
+export default React.createClass({
+  displayName: 'HothForm',
 
-export const UnconnectedForm = React.createClass({
-  mixins: [PureRenderMixin],
-
-  getFormState: function() {
-    const {id, fields, initialized, errors} = this.props;
-    return {
-      id, 
-      fields: fields.toJS(),
-      initialized,
-      errors
-    }
+  updateForm: function(fields, element) {
+    const {onChange, validate} = this.props;
+    let changes = changeValue(fields, element);
+    changes = additionalChanges(changes, onChange, element);
+    changes = performValidation(changes, validate);
+    this.setState(changes);
   },
 
-  onFieldChange: function(e) {
-    const {dispatch, id, onChange, validate} = this.props;
-    dispatch(Actions.changeFieldValue({id, onChange, validate, element: e.target}));    
-  },
-
-  onFieldFocus: function(e) {
-    this.handleFocusChange(e)
-  },
-
-  onFieldBlur: function(e) {
-    this.handleFocusChange(e);
+  resetFields: function() {
+    const {onChange, validate} = this.props;
+    let changes = resetFields(this.state.fields);
+    changes = additionalChanges(changes, onChange);
+    changes = performValidation(changes, validate);
+    this.setState(changes);
   },
 
   handleFocusChange: function(e) {
-    const {dispatch, id} = this.props;
-    dispatch(Actions.changeFocus(id, e.target, e.type));
+    let changes = additionalChanges(this.state.fields, () => {
+      return {[e.target.name]: {active: e.type === 'focus'}}
+    });
+    this.setState({fields: changes});
   },
+
+  getFormState: function() {
+    const {fields, errors, reset} = this.state;
+    return {fields, errors, reset}
+  },
+
+  onFieldChange: function(fn, e) {
+    fn && fn(e);
+    this.updateForm(this.state.fields, e.target);
+  },
+
+  onFieldFocus: function(fn, e) {
+    fn && fn(e);
+    this.handleFocusChange(e)
+  },
+
+  onFieldBlur: function(fn, e) {
+    fn && fn(e);
+    this.handleFocusChange(e);
+  },  
 
   onFormSubmit: function(e) {
     e.preventDefault();
@@ -45,72 +63,71 @@ export const UnconnectedForm = React.createClass({
   },
 
   componentWillMount: function() {
-    const {dispatch, id, fields, onChange, validate} = this.props;
-    if (!id) throw new Error('You forgot to provide form id');
-    if (!fields) throw new Error('You forgot to provide form fields');
-    dispatch(Actions.initForm({id, fields, onChange, validate}));    
+    const {fields} = this.props;
+    if (!fields) throw new Error('You forgot to provide form fields');    
+    const initializedFields = initFields(this.props.fields);
+    this.setState({fields: initializedFields, reset: this.resetFields});
+    this.updateForm(initializedFields);
   },
 
-  componentWillUnmount: function() {
-    const {dispatch, id} = this.props;
-    dispatch({
-      type: actionTypes.destroyForm,
-      payload: {id}
-    });
-  },
-  
   render: function() {
-    const {children, id, fields, initialized, moreErrors} = this.props;
-    if (!initialized) return null;
+    const {children, id} = this.props;
 
     return (
       <form id={id} onSubmit={this.onFormSubmit}>
-        {React.Children.map(children, (el) => {
-          if (el.props) {
-            if (el.props['hoth-form']) {
-              const newProps = el.props['hoth-form'](this.getFormState());
-              return React.cloneElement(el, newProps);
-            }   
-            const fieldProps = fields.get(el.props.name);
-            if (fieldProps) {
-              let props = {
-                onChange: this.onFieldChange,
-                onFocus: this.onFieldFocus,
-                onBlur: this.onFieldBlur,
-                moreErrors: moreErrors && moreErrors[el.props.name]
-              };
-              if (fieldProps.fields) {
-                if (el.type === 'select' || el.props.type === 'select') {
-                  props = {...props, ...fieldProps};
-                } else if (!el.props.value) {
-                  const {value, ...newFieldProps} = fieldProps;
-                  props = {...props, ...newFieldProps};                  
-                } else {
-                  props = {...props, ...fieldProps.fields[el.props.value]};
-                }
-              } else {
-                props = {...props, ...fieldProps};
+        {this.iterateAndInjectProps(children)}
+      </form>
+    )
+  },
+
+  iterateAndInjectProps: function(children) {
+    return React.Children.map(children, (el) => {
+      if (el && el.props) {
+        if (config.fieldGroupClassName.test(el.props.className)) {
+          el = React.cloneElement(el, el.props, this.iterateAndInjectProps(el.props.children));
+        }
+        const getHoth = el.props['hoth'];
+        let hothProps = {};
+        if (getHoth) {
+          hothProps = getHoth(this.getFormState(), el);
+        }   
+        let fieldProps = this.state.fields[el.props.name];
+        if (fieldProps) {
+          fieldProps = {...fieldProps, ...el.props, ...hothProps};
+          const {moreErrors} = this.props;
+          let props = {
+            onChange: this.onFieldChange.bind(null, fieldProps.onChange),
+            onFocus: this.onFieldFocus.bind(null, fieldProps.onFocus),
+            onBlur: this.onFieldBlur.bind(null, fieldProps.onBlur),
+            moreErrors: moreErrors && moreErrors[el.props.name]
+          };
+          if (fieldProps.fields) {
+            if (el.type === 'select' || el.props.widget === 'select' || fieldProps.widget === 'select') {
+              let value = fieldProps.value;
+              if (!el.props.mutiple && !fieldProps.multiple) {
+                value = value[0];
               }
-              return React.cloneElement(el, props);
+              props = {...fieldProps, ...props, value};
+            /*} else if (!el.props.value) { // I've forgotten why need this line :D
+              const {value, ...newFieldProps} = fieldProps;
+              props = {...newFieldProps, ...props};     */             
             } else {
-              return el;
+              props = {...fieldProps.fields[el.props.value], ...props};
             }
+          } else {
+            props = {...fieldProps, ...props};
+          }
+          return React.cloneElement(el, filterProps(el, props));
+        } else {
+          if (getHoth) {
+            return React.cloneElement(el, filterProps(el, hothProps));
           } else {
             return el;
           }
-        })}
-      </form>
-    )
+        }
+      } else {
+        return el;
+      }
+    });
   }
 });
-
-export function mapStateToProps(state, ownProps) {
-  const slice = config.selector(state);
-  return {
-    fields: slice.getIn([ownProps.id, 'fields']) || ownProps.fields,
-    initialized: slice.getIn([ownProps.id, 'initialized']),
-    errors: slice.getIn([ownProps.id, 'errors']),
-  }
-}
-
-export default connect(mapStateToProps)(UnconnectedForm)

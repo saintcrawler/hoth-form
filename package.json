@@ -1,13 +1,13 @@
 {
   "name": "hoth-form",
-  "version": "0.0.6",
-  "description": "Another form builder for React and Redux",
+  "version": "0.1.0",
+  "description": "Another form builder for React",
   "main": "lib/index.js",
   "scripts": {
-    "test": "mocha src/test --compilers js:babel-core/register --require src/test/jsdom-setup.js",
+    "test": "mocha src/test --compilers js:babel-core/register",
     "compile": "babel src -d lib",
     "prepublish": "npm run compile",
-    "coverage": "node node_modules/istanbul/lib/cli cover node_modules/mocha/bin/_mocha -- src/test --compilers js:babel-core/register --require src/test/jsdom-setup.js"
+    "coverage": "node node_modules/istanbul/lib/cli cover node_modules/mocha/bin/_mocha -- src/test --compilers js:babel-core/register"
   },
   "repository": {
     "type": "git",
@@ -15,8 +15,8 @@
   },
   "keywords": [
     "react",
-    "redux",
-    "form"
+    "form",
+    "validation"
   ],
   "author": "saintcrawler",
   "license": "ISC",
@@ -36,20 +36,15 @@
     "chai-subset": "^1.2.2",
     "enzyme": "^2.3.0",
     "istanbul": "^1.0.0-alpha",
-    "jsdom": "^9.3.0",
     "mocha": "^2.5.3",
     "react-addons-test-utils": "^15.1.0",
     "sinon": "^1.17.4",
     "sinon-chai": "^2.8.0"
   },
   "dependencies": {
-    "immutable": "^3.8.1",
     "lodash": "^4.13.1",
     "react": "^15.1.0",
     "react-addons-pure-render-mixin": "^15.1.0",
-    "react-dom": "^15.1.0",
-    "react-redux": "^4.4.5",
-    "redux": "^3.5.2",
-    "redux-thunk": "^2.1.0"
+    "react-dom": "^15.1.0"
   }
 }

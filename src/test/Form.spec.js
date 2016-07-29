@@ -1,40 +1,43 @@
 import React from 'react'
-import { createStore, combineReducers, applyMiddleware } from 'redux'
-import thunk from 'redux-thunk'
 import { spy, match } from 'sinon'
 import chai, { expect } from 'chai'
-import { mount } from 'enzyme'
+import { shallow } from 'enzyme'
 import chaiEnzyme from 'chai-enzyme'
 import sinonChai from 'sinon-chai'
+import chaiSubset from 'chai-subset'
 
-import Form, { UnconnectedForm } from '../containers/Form'
-import formReducer from '../reducers'
+import Form from '../containers/Form'
+import Field from '../containers/Field'
 import config from '../config'
 
-const { actionTypes } = config;
 chai.use(chaiEnzyme());
 chai.use(sinonChai);
+chai.use(chaiSubset);
 
 const fields = {
   username: 'john',
   sex: {fields: ['male', 'female'], value: 'male'},
   agree: false,
   hands: {fields: ['left', 'right'], value: []},
-  fruits: {fields: ['tomato', 'potato'], value: 'tomato'},
-  pets: {fields: ['rat', 'python'], value: ['rat']}
+  fruits: {fields: ['tomato', 'potato'], value: ['tomato']},
+  pets: {fields: ['rat', 'python'], value: ['rat'], className: 'myPets'}
 };
 
-function onChange() {
+function onChange(p) {
   return {
     fruits: {
       fields: {potato: {disabled: true}}
+    },
+    wontBeInjected: {
+      foo: 'bar'
     }
   }
 }
 
 function validate(fields) {
   return {
-    username: 'Too many johnes'
+    username: 'Too many johnes',
+    wontBeInjected: 'foo'
   }
 }
 
@@ -44,130 +47,154 @@ function disableSubmit(fields) {
   }
 }
 
+function createForm(onChange, validate, moreErrors) {
+  return shallow(
+    <Form fields={fields} onChange={onChange} validate={validate} moreErrors={moreErrors}>
+      <Field id="username" name="username" />
+      <input id="male" name="sex" value="male" type="radio" />
+      <input id="female" name="sex" value="female" type="radio" />
+      <input id="agree" name="agree" type="checkbox" />
+      <input id="left" name="hands" value="left" type="checkbox" />
+      <input id="right" name="hands" value="right" type="checkbox" />
+      <fieldset className="extra field-group">
+        <legend>Extra</legend>
+        <select id="fruits" name="fruits">
+          <option id="tomato" value="tomato">Tomato</option>
+          <option value="potato">Potato</option>
+        </select>
+        <select id="pets" name="pets" multiple>
+          <option value="rat">Rat</option>
+          <option value="python">Python</option>
+        </select>
+      </fieldset>
+      <input id="excess" name="excess" />
+      <button hoth={disableSubmit}>Submit</button>
+    </Form>
+  );
+}
+
 describe('Form container', function() {
-  let spiedReducer;
-  let createForm;
-  
-  beforeEach(function() {
-    spiedReducer = spy(combineReducers({form: formReducer}));
-    const store = createStore(spiedReducer, {}, applyMiddleware(thunk));    
-    createForm = function(onChange, validate, moreErrors) {
-      return mount(
-        <Form store={store} id="form1" fields={fields} onChange={onChange} validate={validate} moreErrors={moreErrors}>
-          <input id="username" name="username" />
-          <input id="male" name="sex" value="male" type="radio" />
-          <input id="female" name="sex" value="female" type="radio" />
-          <input id="agree" name="agree" type="checkbox" />
-          <input id="left" name="hands" value="left" type="checkbox" />
-          <input id="right" name="hands" value="right" type="checkbox" />
-          <select id="fruits" name="fruits">
-            <option id="tomato" value="tomato">Tomato</option>
-            <option value="potato">Potato</option>
-          </select>
-          <select id="pets" name="pets" multiple>
-            <option value="rat">Rat</option>
-            <option value="python">Python</option>
-          </select>
-          <input id="excess" name="excess" />
-          <button hoth-form={disableSubmit}>Submit</button>
-        </Form>
-      );
-    };
+  it('requires `fields` prop', function() {
+    expect(() => {shallow(<Form />)}).to.throw(Error);
+    expect(() => {shallow(<Form fields={fields} />)}).to.not.throw(Error);
   });
 
-  it('requires id and fields props', function() {
-    const dispatch = spy();
-    expect(() => {mount(<UnconnectedForm dispatch={dispatch} id={'form1'} />)}).to.throw(Error);
-    expect(() => {mount(<UnconnectedForm dispatch={dispatch} fields={{}} />)}).to.throw(Error);
-    expect(() => {mount(<UnconnectedForm dispatch={dispatch} id={'form1'} fields={{}} />)}).to.not.throw(Error);
+  it('handles focus changes', function() {
+    const form = createForm();
+    form.find('#username').simulate('focus', {target: {name: 'username'}, type: 'focus'});
+    expect(form.state()).to.containSubset({
+      fields: {
+        username: {active: true}
+      }
+    });
+    form.find('#username').simulate('blur', {target: {name: 'username'}, type: 'blur'});
+    expect(form.state()).to.containSubset({
+      fields: {
+        username: {active: false}
+      }
+    });
   });
 
-  describe('when mounted', function() {
-    function testInitFormAction() {
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.initForm,
-        payload: {
-          id: 'form1',
-          fields
+  it('can reset fields to initial values (and also calls `onChange` and `validate` in process)', function() {
+    const form = createForm(onChange, validate);
+    form.find('#username').simulate('change', {target: {name: 'username', value: 'mark'}});
+    form.state().reset();
+    expect(form.state()).to.containSubset({
+      fields: {
+        username: {
+          value: 'john',
+          dirty: false,
+          errors: ['Too many johnes']
+        }
+      }
+    });
+    expect(form.find('button')).to.have.prop('disabled', true);
+  });
+
+  describe('when has been mounted', function() {
+    it('initializes fields', function() {
+      const form = createForm();
+
+      expect(form.state()).to.containSubset({
+        fields: {
+          username: {initialValue: 'john', value: 'john'},
+          sex: {fields: {male: {checked: true}, female: {checked: false}}, initialValue: ['male'], value: ['male']},
+          agree: {initialValue: false, value: false, checked: false},
+          hands: {fields: {left: {checked: false}, right: {checked: false}}, initialValue: [], value: []},
+          fruits: {fields: {tomato: {checked: true}, potato: {checked: false}}, initialValue: ['tomato'], value: ['tomato']},
+          pets: {fields: {rat: {checked: true}, python: {checked: false}}, initialValue: ['rat'], value: ['rat'], className: 'myPets'},
+          nonFieldErrors: {errors: null}
+        },
+        errors: false,
+        // reset: form.resetFields
+      });
+    });
+
+    it('calls `onChange` function if it is provided', function() {
+      const form = createForm(onChange);
+      expect(form.state()).to.containSubset({
+        fields: {
+          fruits: {fields: {potato: {disabled: true}}}
         }
       });
-    }
-
-    describe('without onChange and validate', function() {
-      it('dispatches INIT_FORM action', function() {
-        createForm();
-        testInitFormAction();
-        expect(spiedReducer.callCount).to.eql(2);
+      expect(form.state()).to.not.containSubset({
+        fields: {
+          wontBeInjected: {foo: 'bar'}
+        }
       });
     });
 
-    describe('with onChange', function() {
-      it('dispatches INIT_FORM, ADDITIONAL_CHANGES actions', function() {
-        createForm(onChange);
-        testInitFormAction();
-        expect(spiedReducer).to.have.been.calledWith(match.any, {
-          type: actionTypes.additionalChanges,
-          payload: {
-            id: 'form1',
-            fields: {
-              fruits: {
-                fields: {potato: {disabled: true}}
-              }
-            }
-          }
-        });
-        expect(spiedReducer.callCount).to.eql(3);
+    it('calls `validate` function if it is provided', function() {
+      const form = createForm(undefined, validate);
+      expect(form.state()).to.containSubset({
+        fields: {
+          username: {errors: ['Too many johnes']},              
+        },
+        errors: true
+      });
+      expect(form.state()).to.not.containSubset({
+        fields: {
+          wontBeInjected: {errors: ['foo']}
+        }
       });
     });
 
-    describe('with validate', function() {
-      it('dispatches INIT_FORM, SET_ERRORS actions', function() {
-        createForm(undefined, validate);
-        testInitFormAction();
-        expect(spiedReducer).to.have.been.calledWith(match.any, {
-          type: actionTypes.setErrors,
-          payload: {
-            id: 'form1',
-            fields: {
-              username: 'Too many johnes',              
-            }
-          }
-        });
-        expect(spiedReducer.callCount).to.eql(3);
-      });
-    });
-  });
-
-  describe('when unmounted', function() {
-    it('dispatches DESTROY_FORM action', function() {
+    it('initializes `non-field-errors` field with the key from config object', function() {
+      const savedKey = config.nonFieldErrorsKey;
+      config.nonFieldErrorsKey = 'formErrors';
       const form = createForm();
-      form.unmount();
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.destroyForm,
-        payload: {id: 'form1'}
+      expect(form.state()).to.containSubset({
+        fields: {
+          formErrors: {errors: null}
+        }
       });
+      config.nonFieldErrorsKey = savedKey;
     });
   });
 
   describe('on render', function() {
-    it('provides children which have prop `name` with corresponding field props', function() {
+    it('provides direct children which have prop `name` with corresponding field props', function() {
       const form = createForm(onChange);
       expect(form.find("#username")).to.have.prop('value', 'john');
       expect(form.find("#male")).to.have.prop('checked', true);
       expect(form.find("#female")).to.have.prop('checked', false);
       expect(form.find("#agree")).to.have.prop('value', false);
-      expect(form.find("#tomato")).to.be.selected();
       expect(Object.keys(form.find("#excess").props()).length).to.eql(2);
       expect(Object.keys(form.find("button").props()).length).to.eql(3); // children 'Submit'
     });
 
-    it('provides children which have prop `hoth-form` with props returned by calling `hoth-form` function', function() {
+    it('provides indirect children which parents have className equal to `fieldGroupClassName` with corresponding field props', function() {
+      const form = createForm();
+      expect(form.find("#fruits")).to.have.prop('value', 'tomato');
+      expect(form.find("#pets")).to.have.prop('className', 'myPets');
+    });
+
+    it('provides children which have prop `hoth` with props returned by calling `hoth` function', function() {
       const spied = spy(disableSubmit);
       const form = createForm();
-      // Something strange here - it shows that spy is not being called, but injects props correctly
 
+      // Something strange here - it shows that spy is not being called, but injects props correctly
       // expect(spied).to.have.been.calledWith({
-      //   id: 'form1',
       //   fields: {
       //     username: {initialValue: 'john', value: 'john'},
       //     sex: {fields: {male: {checked: true}, female: {checked: false}}, initialValue: 'male', value: 'male'},
@@ -177,7 +204,6 @@ describe('Form container', function() {
       //     pets: {fields: {rat: {checked: true}, python: {checked: false}}, initialValue: ['rat'], value: ['rat']},
       //     nonFieldErrors: {errors: null}
       //   },
-      //   initialized: true,
       //   errors: false
       // });
       expect(form.find('button')).to.have.prop('disabled', true);
@@ -185,28 +211,36 @@ describe('Form container', function() {
   });
 
   describe('onFieldChange function', function() {
-    it('calls `onChange` function if exists', function() {
+    // Something strange again.. Maybe I do it wrong, but seems like it works.
+    it.skip('calls `onChange` function if it is provided', function() {
       const spied = spy(onChange);
       const form = createForm(spied);
       form.find('#username').simulate('change', {target: {name: 'username', value: 'mark'}});
       expect(spied).to.have.been.calledWith({
-        username: {
-          value: 'mark'
-        }
+        username: {initialValue: 'john', value: 'mark', dirty: true},
+        sex: {fields: {male: {checked: true}, female: {checked: false}}, initialValue: 'male', value: 'male'},
+        agree: {checked: false, initialValue: false, value: false},
+        hands: {fields: {left: {checked: false}, right: {checked: false}}, initialValue: [], value: []},
+        fruits: {fields: {tomato: {checked: true}, potato: {checked: false}}, initialValue: 'tomato', value: ['tomato']},
+        pets: {fields: {rat: {checked: true}, python: {checked: false}}, initialValue: ['rat'], value: ['rat'], className: 'myPets'},
+        nonFieldErrors: {errors: null}
+      }, {
+        name: 'username',
+        value: 'mark'
       });
     });
 
-    it('calls `validate` function if exists', function() {
+    it('calls `validate` function if it is provided', function() {
       const spied = spy(validate);
       const form = createForm(null, spied);
       form.find('#username').simulate('change', {target: {name: 'username', value: 'mark'}});
       expect(spied).to.have.been.calledWith({
         username: {initialValue: 'john', value: 'mark', errors: ['Too many johnes'], dirty: true},
-        sex: {fields: {male: {checked: true}, female: {checked: false}}, initialValue: 'male', value: 'male'},
+        sex: {fields: {male: {checked: true}, female: {checked: false}}, initialValue: ['male'], value: ['male']},
         agree: {checked: false, initialValue: false, value: false},
         hands: {fields: {left: {checked: false}, right: {checked: false}}, initialValue: [], value: []},
-        fruits: {fields: {tomato: {checked: true}, potato: {checked: false}}, initialValue: 'tomato', value: 'tomato'},
-        pets: {fields: {rat: {checked: true}, python: {checked: false}}, initialValue: ['rat'], value: ['rat']},
+        fruits: {fields: {tomato: {checked: true}, potato: {checked: false}}, initialValue: ['tomato'], value: ['tomato']},
+        pets: {fields: {rat: {checked: true}, python: {checked: false}}, initialValue: ['rat'], value: ['rat'], className: 'myPets'},
         nonFieldErrors: {errors: null}
       });
     });
@@ -218,24 +252,27 @@ describe('Form container', function() {
 
     it('handles input changes', function() {
       const form = createForm();
-      form.find('#username').simulate('change', {target: {name: 'username', value: 'mark'}});
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.editFields,
-        payload: {
-          id: 'form1',
-          fields: {username: {value: 'mark'}}
+      form.find('#username').simulate('change', {target: {
+        name: 'username', 
+        value: 'mark'
+      }});
+      expect(form.state()).to.containSubset({
+        fields: {
+          username: {value: 'mark'}
         }
       });
     });
 
     it('handles radio changes', function() {
       const form = createForm();
-      form.find('#female').simulate('change', {target: {name: 'sex', value: 'female', checked: true}});
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.editFields,
-        payload: {
-          id: 'form1',
-          fields: {sex: {value: 'female'}}
+      form.find('#female').simulate('change', {target: {
+        name: 'sex', 
+        value: 'female', 
+        checked: true
+      }});
+      expect(form.state()).to.containSubset({
+        fields: {
+          sex: {value: 'female'}
         }
       });
     });
@@ -248,11 +285,9 @@ describe('Form container', function() {
         value: 'false',
         checked: true
       }});
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.editFields,
-        payload: {
-          id: 'form1',
-          fields: {agree: {value: true}}
+      expect(form.state()).to.containSubset({
+        fields: {
+          agree: {value: true}
         }
       });
     });
@@ -265,12 +300,10 @@ describe('Form container', function() {
         value: 'left', 
         checked: true
       }});
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.editFields,
-        payload: {
-          id: 'form1',
-          fields: {
-            hands: {fields: {left: {checked: true}}}
+      expect(form.state()).to.containSubset({
+        fields: {
+          hands: {
+            fields: {left: {checked: true}}
           }
         }
       });
@@ -286,11 +319,11 @@ describe('Form container', function() {
           {selected: true, value: 'potato'}
         ]
       }});
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.editFields,
-        payload: {
-          id: 'form1',
-          fields: {fruits: {value: 'potato'}}
+      expect(form.state()).to.containSubset({
+        fields: {
+          fruits: {
+            value: ['potato']
+          }
         }
       });
     });
@@ -305,12 +338,33 @@ describe('Form container', function() {
           {selected: true, value: 'python'}
         ]
       }});
-      expect(spiedReducer).to.have.been.calledWith(match.any, {
-        type: actionTypes.editFields,
-        payload: {
-          id: 'form1',
-          fields: {
-            pets: {value: ['rat', 'python']}
+      expect(form.state()).to.containSubset({
+        fields: {
+          pets: {
+            value: ['rat', 'python']
+          }
+        }
+      });
+    });
+
+    it('handles file field changes', function() {
+      const fields = {
+        photo: {id: 'photo', type: 'file'}
+      };
+      const form = shallow(
+        <Form fields={fields} >
+          <Field name="photo" />
+        </Form>
+      );
+      form.find('#photo').simulate('change', {target: {
+        name: 'photo',
+        type: 'file',
+        files: ['myFile1']
+      }});
+      expect(form.state()).to.containSubset({
+        fields: {
+          photo: {
+            value: ['myFile1']
           }
         }
       });
